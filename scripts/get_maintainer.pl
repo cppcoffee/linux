@@ -1086,7 +1086,7 @@ MAINTAINER field selection options:
     --remove-duplicates => minimize duplicate email names/addresses
     --roles => show roles (role:subsystem, git-signer, list, etc...)
     --rolestats => show roles and statistics (commits/total_commits, %)
-    --substatus => show subsystem status if not Maintained (default: match --roles when output is tty)"
+    --substatus => show subsystem status if not Maintained (default: match --roles when output is tty)
     --file-emails => add email addresses found in -f file (default: 0 (off))
     --fixes => for patches, add signatures of commits with 'Fixes: <commit>' (default: 1 (on))
   --scm => print SCM tree(s) if any
@@ -1895,7 +1895,7 @@ p# pattern match depth  [$pattern_depth]
 EOT
 	}
 	print STDERR
-"\n#(toggle), A#(author), S#(signed) *(all), ^(none), O(options), Y(approve): ";
+"\n#(toggle), A#(author), S#(signed), *(all), ^(none), O(options), Y(approve): ";
 
 	my $input = <STDIN>;
 	chomp($input);

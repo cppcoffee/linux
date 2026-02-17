@@ -103,6 +103,14 @@ static int longcmp(const unsigned long *l1, const unsigned long *l2, size_t n)
 {
 	size_t i;
 
+	if (n == 1) {
+		if (l1[0] < l2[0])
+			return -1;
+		if (l1[0] > l2[0])
+			return 1;
+		return 0;
+	}
+
 	for (i = 0; i < n; i++) {
 		if (l1[i] < l2[i])
 			return -1;
@@ -117,6 +125,11 @@ static unsigned long *longcpy(unsigned long *dest, const unsigned long *src,
 {
 	size_t i;
 
+	if (n == 1) {
+		dest[0] = src[0];
+		return dest;
+	}
+
 	for (i = 0; i < n; i++)
 		dest[i] = src[i];
 	return dest;
@@ -125,6 +138,11 @@ static unsigned long *longcpy(unsigned long *dest, const unsigned long *src,
 static unsigned long *longset(unsigned long *s, unsigned long c, size_t n)
 {
 	size_t i;
+
+	if (n == 1) {
+		s[0] = c;
+		return s;
+	}
 
 	for (i = 0; i < n; i++)
 		s[i] = c;
@@ -135,6 +153,12 @@ static void dec_key(struct btree_geo *geo, unsigned long *key)
 {
 	unsigned long val;
 	int i;
+
+	if (geo->keylen == 1) {
+		val = key[0];
+		key[0] = val - 1;
+		return;
+	}
 
 	for (i = geo->keylen - 1; i >= 0; i--) {
 		val = key[i];
@@ -220,8 +244,8 @@ void *btree_last(struct btree_head *head, struct btree_geo *geo,
 }
 EXPORT_SYMBOL_GPL(btree_last);
 
-static int keycmp(struct btree_geo *geo, unsigned long *node, int pos,
-		  unsigned long *key)
+static __always_inline int keycmp(struct btree_geo *geo, unsigned long *node, int pos,
+				  unsigned long *key)
 {
 	return longcmp(bkey(geo, node, pos), key, geo->keylen);
 }
@@ -229,6 +253,9 @@ static int keycmp(struct btree_geo *geo, unsigned long *node, int pos,
 static int keyzero(struct btree_geo *geo, unsigned long *key)
 {
 	int i;
+
+	if (geo->keylen == 1)
+		return !key[0];
 
 	for (i = 0; i < geo->keylen; i++)
 		if (key[i])

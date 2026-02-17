@@ -500,16 +500,19 @@ class AbiParser:
 
                 msg += f".. _{key}:\n\n"
 
-                max_len = 0
-                for i in range(0, len(names)):           # pylint: disable=C0200
-                    names[i] = "**" + self.re_escape.sub(r"\\\1", names[i]) + "**"
+                names = [
+                    "**" + self.re_escape.sub(r"\\\1", name) + "**"
+                    for name in names
+                ]
 
-                    max_len = max(max_len, len(names[i]))
+                max_len = max(len(name) for name in names) if names else 0
 
-                msg += "+-" + "-" * max_len + "-+\n"
-                for name in names:
-                    msg += f"| {name}" + " " * (max_len - len(name)) + " |\n"
-                    msg += "+-" + "-" * max_len + "-+\n"
+                sep = "+-" + "-" * max_len + "-+\n"
+                msg += sep
+                msg += "".join(
+                    f"| {name}" + " " * (max_len - len(name)) + " |\n" + sep
+                    for name in names
+                )
                 msg += "\n"
 
             for ref in file_ref:

@@ -172,8 +172,14 @@ static int button_read (struct file *filp, char __user *buffer,
 	prepare_to_wait(&button_wait_queue, &wait, TASK_INTERRUPTIBLE);
 	schedule();
 	finish_wait(&button_wait_queue, &wait);
-	return (copy_to_user (buffer, &button_output_buffer, bcount))
-		 ? -EFAULT : bcount;
+
+	if (bcount < 0)
+		return -EFAULT;
+	if (count > bcount)
+		count = bcount;
+
+	return (copy_to_user (buffer, &button_output_buffer, count))
+		 ? -EFAULT : count;
 }
 
 /* 

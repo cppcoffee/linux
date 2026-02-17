@@ -459,7 +459,8 @@ retry:
 	pos = getpos(geo, node, key);
 	fill = getfill(geo, node, pos);
 	/* two identical keys are not allowed */
-	BUG_ON(pos < fill && keycmp(geo, node, pos, key) == 0);
+	if (pos < fill && keycmp(geo, node, pos, key) == 0)
+		return -EEXIST;
 
 	if (fill == geo->no_pairs) {
 		/* need to split node */
@@ -631,12 +632,35 @@ void *btree_remove(struct btree_head *head, struct btree_geo *geo,
 }
 EXPORT_SYMBOL_GPL(btree_remove);
 
+static int btree_merge_move(struct btree_head *target, struct btree_geo *geo,
+			    unsigned long *node, int height, gfp_t gfp)
+{
+	unsigned long *child;
+	unsigned long *key;
+	int i, err;
+
+	for (i = 0; i < geo->no_pairs; i++) {
+		child = bval(geo, node, i);
+		if (!child)
+			break;
+
+		if (height > 1) {
+			err = btree_merge_move(target, geo, child, height - 1, gfp);
+			if (err)
+				return err;
+		} else {
+			key = bkey(geo, node, i);
+			err = btree_insert(target, geo, key, child, gfp);
+			if (err && err != -EEXIST)
+				return err;
+		}
+	}
+	return 0;
+}
+
 int btree_merge(struct btree_head *target, struct btree_head *victim,
 		struct btree_geo *geo, gfp_t gfp)
 {
-	unsigned long key[MAX_KEYLEN];
-	unsigned long dup[MAX_KEYLEN];
-	void *val;
 	int err;
 
 	BUG_ON(target == victim);
@@ -649,20 +673,14 @@ int btree_merge(struct btree_head *target, struct btree_head *victim,
 		return 0;
 	}
 
-	/* TODO: This needs some optimizations.  Currently we do three tree
-	 * walks to remove a single object from the victim.
-	 */
-	for (;;) {
-		val = btree_last(victim, geo, key);
-		if (!val)
-			break;
-		err = btree_insert(target, geo, key, val, gfp);
+	/* Move all elements from victim to target */
+	if (victim->node) {
+		err = btree_merge_move(target, geo, victim->node, victim->height,
+				       gfp);
 		if (err)
 			return err;
-		/* We must make a copy of the key, as the original will get
-		 * mangled inside btree_remove. */
-		longcpy(dup, key, geo->keylen);
-		btree_remove(victim, geo, dup);
+
+		btree_grim_visitor(victim, geo, 0, NULL, NULL);
 	}
 	return 0;
 }

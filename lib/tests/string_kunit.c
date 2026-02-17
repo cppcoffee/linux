@@ -104,6 +104,37 @@ static void string_test_memset64(struct kunit *test)
 	}
 }
 
+static void string_test_memchr(struct kunit *test)
+{
+	const char *test_string = "abcdefghijkl";
+	const char *empty_string = "";
+	char *result;
+	int i;
+
+	for (i = 0; i < strlen(test_string) + 1; i++) {
+		result = memchr(test_string, test_string[i], strlen(test_string) + 1);
+		KUNIT_ASSERT_EQ_MSG(test, result - test_string, i,
+				    "char:%c", 'a' + i);
+	}
+
+	result = memchr(empty_string, 'a', 0);
+	KUNIT_ASSERT_NULL(test, result);
+
+	result = memchr(test_string, 'z', strlen(test_string) + 1);
+	KUNIT_ASSERT_NULL(test, result);
+
+	/* Alignment test */
+	{
+		char large_buf[32];
+		memset(large_buf, 'x', sizeof(large_buf));
+		large_buf[20] = 'y';
+		for (i = 0; i < 16; i++) {
+			result = memchr(large_buf + i, 'y', sizeof(large_buf) - i);
+			KUNIT_ASSERT_PTR_EQ_MSG(test, result, large_buf + 20, "alignment:%d", i);
+		}
+	}
+}
+
 static void string_test_strchr(struct kunit *test)
 {
 	const char *test_string = "abcdefghijkl";
@@ -618,6 +649,7 @@ static struct kunit_case string_test_cases[] = {
 	KUNIT_CASE(string_test_memset16),
 	KUNIT_CASE(string_test_memset32),
 	KUNIT_CASE(string_test_memset64),
+	KUNIT_CASE(string_test_memchr),
 	KUNIT_CASE(string_test_strchr),
 	KUNIT_CASE(string_test_strnchr),
 	KUNIT_CASE(string_test_strspn),

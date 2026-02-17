@@ -28,6 +28,7 @@
 #include <asm/page.h>
 #include <asm/rwonce.h>
 #include <linux/unaligned.h>
+#include <linux/wordpart.h>
 #include <asm/word-at-a-time.h>
 
 #ifndef __HAVE_ARCH_STRNCASECMP
@@ -805,11 +806,35 @@ EXPORT_SYMBOL(strnstr);
 void *memchr(const void *s, int c, size_t n)
 {
 	const unsigned char *p = s;
-	while (n-- != 0) {
-        	if ((unsigned char)c == *p++) {
-			return (void *)(p - 1);
-		}
+	const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
+	unsigned long mask = REPEAT_BYTE((unsigned char)c);
+	unsigned long data;
+
+	while (n && ((unsigned long)p & (sizeof(long) - 1))) {
+		if (*p == (unsigned char)c)
+			return (void *)p;
+		p++;
+		n--;
 	}
+
+	while (n >= sizeof(long)) {
+		unsigned long val = *(unsigned long *)p;
+
+		if (has_zero(val ^ mask, &data, &constants)) {
+			data = prep_zero_mask(val ^ mask, data, &constants);
+			data = create_zero_mask(data);
+			return (void *)(p + find_zero(data));
+		}
+		p += sizeof(long);
+		n -= sizeof(long);
+	}
+
+	while (n--) {
+		if (*p == (unsigned char)c)
+			return (void *)p;
+		p++;
+	}
+
 	return NULL;
 }
 EXPORT_SYMBOL(memchr);

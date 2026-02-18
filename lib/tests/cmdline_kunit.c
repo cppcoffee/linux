@@ -139,11 +139,106 @@ static void cmdline_test_range(struct kunit *test)
 	} while (++i < ARRAY_SIZE(cmdline_test_range_strings));
 }
 
+static void cmdline_test_memparse(struct kunit *test)
+{
+	unsigned long long res;
+	char *retptr;
+
+	res = memparse("1K", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL);
+	KUNIT_EXPECT_EQ(test, *retptr, '\0');
+
+	res = memparse("1M", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL * 1024);
+
+	res = memparse("1G", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL * 1024 * 1024);
+
+	res = memparse("1T", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL * 1024 * 1024 * 1024);
+
+	res = memparse("1P", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL * 1024 * 1024 * 1024 * 1024);
+
+	res = memparse("1E", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL * 1024 * 1024 * 1024 * 1024 * 1024);
+
+	res = memparse("1024", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL);
+	KUNIT_EXPECT_EQ(test, *retptr, '\0');
+
+	res = memparse("1k", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL);
+
+	res = memparse("1024L", &retptr);
+	KUNIT_EXPECT_EQ(test, res, 1024ULL);
+	KUNIT_EXPECT_EQ(test, *retptr, 'L');
+}
+
+static void cmdline_test_parse_option_str(struct kunit *test)
+{
+	KUNIT_EXPECT_TRUE(test, parse_option_str("foo,bar", "foo"));
+	KUNIT_EXPECT_TRUE(test, parse_option_str("foo,bar", "bar"));
+	KUNIT_EXPECT_FALSE(test, parse_option_str("foo,bar", "baz"));
+	KUNIT_EXPECT_FALSE(test, parse_option_str("foo=1,bar=2", "foo"));
+	KUNIT_EXPECT_FALSE(test, parse_option_str("foo=1,bar=2", "1"));
+	KUNIT_EXPECT_FALSE(test, parse_option_str("foobar", "foo"));
+	KUNIT_EXPECT_FALSE(test, parse_option_str("foo,bar", "fo"));
+}
+
+static void cmdline_test_next_arg(struct kunit *test)
+{
+	char buffer[] = "a b c";
+	char buffer2[] = "key=value";
+	char buffer3[] = "key=\"val ue\"";
+	char buffer4[] = "a \"b c\" d";
+	char *args = buffer;
+	char *param, *val;
+
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "a");
+	KUNIT_EXPECT_PTR_EQ(test, val, NULL);
+
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "b");
+	KUNIT_EXPECT_PTR_EQ(test, val, NULL);
+
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "c");
+	KUNIT_EXPECT_PTR_EQ(test, val, NULL);
+
+	args = buffer2;
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "key");
+	KUNIT_EXPECT_STREQ(test, val, "value");
+
+	args = buffer3;
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "key");
+	KUNIT_EXPECT_STREQ(test, val, "val ue");
+
+	args = buffer4;
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "a");
+	KUNIT_EXPECT_PTR_EQ(test, val, NULL);
+
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "b c");
+	KUNIT_EXPECT_PTR_EQ(test, val, NULL);
+
+	args = next_arg(args, &param, &val);
+	KUNIT_EXPECT_STREQ(test, param, "d");
+	KUNIT_EXPECT_PTR_EQ(test, val, NULL);
+}
+
 static struct kunit_case cmdline_test_cases[] = {
 	KUNIT_CASE(cmdline_test_noint),
 	KUNIT_CASE(cmdline_test_lead_int),
 	KUNIT_CASE(cmdline_test_tail_int),
 	KUNIT_CASE(cmdline_test_range),
+	KUNIT_CASE(cmdline_test_memparse),
+	KUNIT_CASE(cmdline_test_parse_option_str),
+	KUNIT_CASE(cmdline_test_next_arg),
 	{}
 };
 

@@ -1955,6 +1955,60 @@ static int fill_readdir_cache(struct inode *dir, struct dentry *dn,
 	return 0;
 }
 
+static void drop_readdir_entry_lease(struct ceph_mds_request *req,
+				     struct ceph_mds_session *session,
+				     int index)
+{
+	struct ceph_mds_reply_info_parsed *rinfo = &req->r_reply_info;
+	struct ceph_mds_reply_dir_entry *rde = rinfo->dir_entries + index;
+	struct inode *dir = d_inode(req->r_dentry);
+	struct qstr dname;
+
+	if (rde->lease && rde->lease->duration_ms) {
+		dname.name = rde->name;
+		dname.len = rde->name_len;
+		dname.hash = full_name_hash(req->r_dentry, dname.name, dname.len);
+		ceph_mdsc_lease_send_msg_by_inode(session, dir, &dname,
+						  CEPH_MDS_LEASE_RELEASE,
+						  le32_to_cpu(rde->lease->seq));
+	}
+}
+
+static void drop_readdir_entry_cap(struct ceph_mds_request *req,
+				   struct ceph_mds_session *session,
+				   int index)
+{
+	struct ceph_mds_reply_info_parsed *rinfo = &req->r_reply_info;
+	struct ceph_mds_reply_dir_entry *rde = rinfo->dir_entries + index;
+	struct ceph_mds_client *mdsc = session->s_mdsc;
+	struct ceph_mds_caps *cap_info;
+	struct ceph_cap *cap;
+
+	cap_info = &rde->inode.in->cap;
+	if (le32_to_cpu(cap_info->caps)) {
+		cap = ceph_get_cap(mdsc, NULL);
+		if (cap) {
+			cap->cap_ino = le64_to_cpu(rde->inode.in->ino);
+			cap->queue_release = 1;
+			cap->cap_id = le64_to_cpu(cap_info->cap_id);
+			cap->mseq = le32_to_cpu(cap_info->migrate_seq);
+			cap->seq = le32_to_cpu(cap_info->seq);
+			cap->issue_seq = le32_to_cpu(cap_info->issue_seq);
+			spin_lock(&session->s_cap_lock);
+			__ceph_queue_cap_release(session, cap);
+			spin_unlock(&session->s_cap_lock);
+		}
+	}
+}
+
+static void drop_readdir_entry_state(struct ceph_mds_request *req,
+				     struct ceph_mds_session *session,
+				     int index)
+{
+	drop_readdir_entry_cap(req, session, index);
+	drop_readdir_entry_lease(req, session, index);
+}
+
 int ceph_readdir_prepopulate(struct ceph_mds_request *req,
 			     struct ceph_mds_session *session)
 {
@@ -2111,6 +2165,7 @@ retry_lookup:
 			}
 			d_drop(dn);
 			err = ret;
+			drop_readdir_entry_state(req, session, i);
 			goto next_item;
 		}
 		if (inode_state_read_once(in) & I_NEW)
@@ -2122,12 +2177,15 @@ retry_lookup:
 				      " (security xattr deadlock)\n", dn, in);
 				iput(in);
 				skipped++;
+				drop_readdir_entry_state(req, session, i);
 				goto next_item;
 			}
 
 			err = splice_dentry(&dn, in);
-			if (err < 0)
+			if (err < 0) {
+				drop_readdir_entry_state(req, session, i);
 				goto next_item;
+			}
 		}
 
 		ceph_dentry(dn)->offset = rde->offset;
@@ -2149,8 +2207,13 @@ out:
 	if (err == 0 && skipped == 0) {
 		set_bit(CEPH_MDS_R_DID_PREPOPULATE, &req->r_req_flags);
 		req->r_readdir_cache_idx = cache_ctl.index;
+	} else if (i < rinfo->dir_nr) {
+		for (; i < rinfo->dir_nr; i++)
+			drop_readdir_entry_state(req, session, i);
 	}
 	ceph_readdir_cache_release(&cache_ctl);
+	if (err || skipped)
+		ceph_flush_session_cap_releases(session->s_mdsc, session);
 	doutc(cl, "done\n");
 	return err;
 }

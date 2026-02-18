@@ -5347,6 +5347,34 @@ bad:
 	ceph_msg_dump(msg);
 }
 
+void ceph_mdsc_lease_send_msg_by_inode(struct ceph_mds_session *session,
+				       struct inode *dir,
+				       const struct qstr *dname,
+				       char action, u32 seq)
+{
+	struct ceph_client *cl = session->s_mdsc->fsc->client;
+	struct ceph_msg *msg;
+	struct ceph_mds_lease *lease;
+	int len = sizeof(*lease) + sizeof(u32) + NAME_MAX;
+
+	doutc(cl, "dir %p dname '%.*s' %s to mds%d\n", dir, dname->len,
+	      dname->name, ceph_lease_op_name(action), session->s_mds);
+
+	msg = ceph_msg_new(CEPH_MSG_CLIENT_LEASE, len, GFP_NOFS, false);
+	if (!msg)
+		return;
+	lease = msg->front.iov_base;
+	lease->action = action;
+	lease->seq = cpu_to_le32(seq);
+	lease->ino = cpu_to_le64(ceph_ino(dir));
+	lease->first = lease->last = cpu_to_le64(ceph_snap(dir));
+
+	put_unaligned_le32(dname->len, lease + 1);
+	memcpy((void *)(lease + 1) + 4, dname->name, dname->len);
+
+	ceph_con_send(&session->s_con, msg);
+}
+
 void ceph_mdsc_lease_send_msg(struct ceph_mds_session *session,
 			      struct dentry *dentry, char action,
 			      u32 seq)

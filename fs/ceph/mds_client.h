@@ -641,6 +641,10 @@ extern void __ceph_mdsc_drop_dentry_lease(struct dentry *dentry);
 extern void ceph_mdsc_lease_send_msg(struct ceph_mds_session *session,
 				     struct dentry *dentry, char action,
 				     u32 seq);
+extern void ceph_mdsc_lease_send_msg_by_inode(struct ceph_mds_session *session,
+					      struct inode *dir,
+					      const struct qstr *dname,
+					      char action, u32 seq);
 
 extern void ceph_mdsc_handle_mdsmap(struct ceph_mds_client *mdsc,
 				    struct ceph_msg *msg);

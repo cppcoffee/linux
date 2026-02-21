@@ -950,18 +950,18 @@ static const char *hw_protection_action_str(enum hw_protection_action action)
 	}
 }
 
-static enum hw_protection_action hw_failure_emergency_action;
+static enum hw_protection_action hw_failure_action;
 
 /**
- * hw_failure_emergency_action_func - emergency action work after a known delay
+ * hw_failure_work_func - emergency action work after a known delay
  * @work: work_struct associated with the emergency action function
  *
  * This function is called in very critical situations to force
  * a kernel poweroff or reboot after a configurable timeout value.
  */
-static void hw_failure_emergency_action_func(struct work_struct *work)
+static void hw_failure_work_func(struct work_struct *work)
 {
-	const char *action_str = hw_protection_action_str(hw_failure_emergency_action);
+	const char *action_str = hw_protection_action_str(hw_failure_action);
 
 	pr_emerg("Hardware protection timed-out. Trying forced %s\n",
 		 action_str);
@@ -974,7 +974,7 @@ static void hw_failure_emergency_action_func(struct work_struct *work)
 	 * Try to shut off the system immediately if possible
 	 */
 
-	if (hw_failure_emergency_action == HWPROT_ACT_REBOOT)
+	if (hw_failure_action == HWPROT_ACT_REBOOT)
 		kernel_restart(NULL);
 	else
 		kernel_power_off();
@@ -987,11 +987,10 @@ static void hw_failure_emergency_action_func(struct work_struct *work)
 	emergency_restart();
 }
 
-static DECLARE_DELAYED_WORK(hw_failure_emergency_action_work,
-			    hw_failure_emergency_action_func);
+static DECLARE_DELAYED_WORK(hw_failure_work, hw_failure_work_func);
 
 /**
- * hw_failure_emergency_schedule - Schedule an emergency system shutdown or reboot
+ * hw_failure_schedule - Schedule an emergency system shutdown or reboot
  *
  * @action:		The hardware protection action to be taken
  * @action_delay_ms:	Time in milliseconds to elapse before triggering action
@@ -1000,13 +999,13 @@ static DECLARE_DELAYED_WORK(hw_failure_emergency_action_work,
  * or reboot after a given period of time.
  * If time is negative this is not scheduled.
  */
-static void hw_failure_emergency_schedule(enum hw_protection_action action,
-					  int action_delay_ms)
+static void hw_failure_schedule(enum hw_protection_action action,
+				int action_delay_ms)
 {
 	if (action_delay_ms <= 0)
 		return;
-	hw_failure_emergency_action = action;
-	schedule_delayed_work(&hw_failure_emergency_action_work,
+	hw_failure_action = action;
+	schedule_delayed_work(&hw_failure_work,
 			      msecs_to_jiffies(action_delay_ms));
 }
 
@@ -1044,7 +1043,7 @@ void __hw_protection_trigger(const char *reason, int ms_until_forced,
 	 * Queue a backup emergency shutdown in the event of
 	 * orderly_poweroff failure
 	 */
-	hw_failure_emergency_schedule(action, ms_until_forced);
+	hw_failure_schedule(action, ms_until_forced);
 	if (action == HWPROT_ACT_REBOOT)
 		orderly_reboot();
 	else

@@ -6146,27 +6146,18 @@ static int btrfs_set_inode_index_count(struct btrfs_inode *inode)
 	ret = btrfs_search_slot(NULL, root, &key, path, 0, 0);
 	if (ret < 0)
 		return ret;
-	/* FIXME: we should be able to handle this */
-	if (ret == 0)
+
+	ret = btrfs_previous_item(root, path, btrfs_ino(inode), BTRFS_DIR_INDEX_KEY);
+	if (ret < 0)
 		return ret;
 
-	if (path->slots[0] == 0) {
+	if (ret == 0) {
+		leaf = path->nodes[0];
+		btrfs_item_key_to_cpu(leaf, &found_key, path->slots[0]);
+		inode->index_cnt = found_key.offset + 1;
+	} else {
 		inode->index_cnt = BTRFS_DIR_START_INDEX;
-		return 0;
 	}
-
-	path->slots[0]--;
-
-	leaf = path->nodes[0];
-	btrfs_item_key_to_cpu(leaf, &found_key, path->slots[0]);
-
-	if (found_key.objectid != btrfs_ino(inode) ||
-	    found_key.type != BTRFS_DIR_INDEX_KEY) {
-		inode->index_cnt = BTRFS_DIR_START_INDEX;
-		return 0;
-	}
-
-	inode->index_cnt = found_key.offset + 1;
 
 	return 0;
 }

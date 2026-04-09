@@ -454,6 +454,12 @@ static int ncsi_send_cmd_nl(struct sk_buff *msg, struct genl_info *info)
 
 	hdr = (struct ncsi_pkt_hdr *)data;
 
+	if (ntohs(hdr->length) > len - sizeof(struct ncsi_pkt_hdr)) {
+		netdev_info(ndp->ndev.dev, "NCSI: payload length mismatched\n");
+		ret = -EINVAL;
+		goto out_netlink;
+	}
+
 	nca.ndp = ndp;
 	nca.package = (unsigned char)package_id;
 	nca.channel = (unsigned char)channel_id;

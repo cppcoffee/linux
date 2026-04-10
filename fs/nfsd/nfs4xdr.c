@@ -6281,7 +6281,7 @@ nfsd4_encode_operation(struct nfsd4_compoundres *resp, struct nfsd4_op *op)
 		int len = xdr->buf->len - (op_status_offset + XDR_UNIT);
 
 		so->so_replay.rp_status = op->status;
-		if (len <= NFSD4_REPLAY_ISIZE) {
+		if (len >= 0 && len <= NFSD4_REPLAY_ISIZE) {
 			so->so_replay.rp_buflen = len;
 			read_bytes_from_xdr_buf(xdr->buf,
 						op_status_offset + XDR_UNIT,
